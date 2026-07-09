@@ -5,14 +5,14 @@ interface QuizData {
   id: string;
   creator: string;
   guesser: string;
-  guesserType: string;
+  guesser_type: string;
   questions: {
     id: string;
     text: string;
     options: string[];
     correctIndex: number;
   }[];
-  createdAt: string;
+  created_at: string;
 }
 
 export default function QuizPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,22 +23,37 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const [answers, setAnswers] = useState<number[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [resultsSaved, setResultsSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    const quizData = localStorage.getItem(`quiz_${id}`);
-    if (quizData) {
-      const parsed = JSON.parse(quizData);
-      setQuiz(parsed);
-      setAnswers(new Array(parsed.questions.length).fill(null));
-    } else {
-      const allKeys = Object.keys(localStorage);
-      const quizKey = allKeys.find(key => key.startsWith('quiz_') && key.includes(id));
-      if (quizKey) {
-        const parsed = JSON.parse(localStorage.getItem(quizKey) || '');
-        setQuiz(parsed);
-        setAnswers(new Array(parsed.questions.length).fill(null));
+    const fetchQuiz = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/quizzes?id=${id}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError('Quiz not found');
+          } else {
+            setError('Failed to load quiz');
+          }
+          setLoading(false);
+          return;
+        }
+        
+        const data = await response.json();
+        setQuiz(data.quiz);
+        setAnswers(new Array(data.quiz.questions.length).fill(null));
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching quiz:', error);
+        setError('Failed to load quiz');
+        setLoading(false);
       }
-    }
+    };
+    
+    fetchQuiz();
   }, [id]);
 
   const handleAnswer = (optionIndex: number) => {
@@ -55,7 +70,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
-  const saveResults = (finalAnswers: number[]) => {
+  const saveResults = async (finalAnswers: number[]) => {
     if (!quiz) return;
     
     let correct = 0;
@@ -66,35 +81,52 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
     const results = {
       quizId: quiz.id,
       guesserName: quiz.guesser || 'Partner',
-      guesserType: quiz.guesserType || 'partner',
       answers: finalAnswers,
       score: correct,
-      total: quiz.questions.length,
-      completedAt: new Date().toISOString()
+      total: quiz.questions.length
     };
     
     try {
-      localStorage.setItem(`results_${quiz.id}`, JSON.stringify(results));
-      localStorage.setItem(`quiz_results_${quiz.id}`, JSON.stringify(results));
-      localStorage.setItem(`quiz_completed_${quiz.id}`, new Date().toISOString());
-      console.log('Results saved successfully!', results);
-      setResultsSaved(true);
+      const response = await fetch('/api/results', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(results),
+      });
+      
+      if (response.ok) {
+        setResultsSaved(true);
+      } else {
+        console.error('Failed to save results');
+      }
     } catch (error) {
       console.error('Error saving results:', error);
     }
   };
 
   const getRelationLabel = () => {
-    return quiz?.guesserType === 'partner' ? 'Partner' : 'Friend';
+    return quiz?.guesser_type === 'partner' ? 'Partner' : 'Friend';
   };
 
-  if (!quiz) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <h2 className="text-2xl font-bold text-gray-800">Loading quiz...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !quiz) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
         <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="text-6xl mb-4">🔍</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Not Found</h2>
-          <p className="text-gray-600">This quiz might have been deleted or the link is incorrect.</p>
+          <p className="text-gray-600">{error || 'This quiz might have been deleted or the link is incorrect.'}</p>
           <button 
             className="mt-4 bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600"
             onClick={() => window.location.href = '/'}
@@ -217,7 +249,6 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   const q = quiz.questions[currentQuestion];
   const validOptions = q.options.filter(opt => opt && opt.trim() !== '');
-  const relationLabel = getRelationLabel();
   
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4">

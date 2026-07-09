@@ -30,34 +30,33 @@ export default function CreateQuiz() {
   });
   const [creatorName, setCreatorName] = useState('');
   const [guesserName, setGuesserName] = useState('');
-  const [guesserType, setGuesserType] = useState('partner'); // 'partner' or 'friend'
+  const [guesserType, setGuesserType] = useState('partner');
   const [quizCreated, setQuizCreated] = useState(false);
   const [quizLink, setQuizLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [quizResults, setQuizResults] = useState<QuizResult | null>(null);
   const [checkingResults, setCheckingResults] = useState(false);
+  const [saving, setSaving] = useState(false);
 
+  // Check for results every 5 seconds
   useEffect(() => {
     if (!quizCreated) return;
     
     const quizId = quizLink.split('/').pop();
     if (!quizId) return;
     
-    const checkResults = () => {
-      const result1 = localStorage.getItem(`results_${quizId}`);
-      const result2 = localStorage.getItem(`quiz_results_${quizId}`);
-      
-      let data = result1 || result2;
-      
-      if (data) {
-        try {
-          const parsed = JSON.parse(data);
-          setQuizResults(parsed);
-          setCheckingResults(false);
-        } catch (e) {
-          console.error('Error parsing results:', e);
+    const checkResults = async () => {
+      try {
+        const response = await fetch(`/api/results?quizId=${quizId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results) {
+            setQuizResults(data.results);
+          }
         }
+      } catch (error) {
+        console.error('Error checking results:', error);
       }
     };
     
@@ -114,27 +113,47 @@ export default function CreateQuiz() {
     setCurrentQuestion({ ...currentQuestion, options: newOptions });
   };
 
-  const saveQuiz = () => {
+  const saveQuiz = async () => {
     if (questions.length === 0) {
       alert('Please add at least one question');
       return;
     }
     
-    const quizId = uuidv4();
-    const quizData = {
-      id: quizId,
-      creator: creatorName || 'Someone',
-      guesser: guesserName || (guesserType === 'partner' ? 'Partner' : 'Friend'),
-      guesserType: guesserType,
-      questions: questions,
-      createdAt: new Date().toISOString()
-    };
+    setSaving(true);
     
-    localStorage.setItem(`quiz_${quizId}`, JSON.stringify(quizData));
-    
-    const url = `${window.location.origin}/quiz/${quizId}`;
-    setQuizLink(url);
-    setQuizCreated(true);
+    try {
+      const quizId = uuidv4();
+      const quizData = {
+        id: quizId,
+        creator: creatorName || 'Someone',
+        guesser: guesserName || (guesserType === 'partner' ? 'Partner' : 'Friend'),
+        guesserType: guesserType,
+        questions: questions,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Save to database via API
+      const response = await fetch('/api/quizzes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(quizData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save quiz');
+      }
+      
+      const url = `${window.location.origin}/quiz/${quizId}`;
+      setQuizLink(url);
+      setQuizCreated(true);
+    } catch (error) {
+      console.error('Error saving quiz:', error);
+      alert('Failed to save quiz. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const copyToClipboard = async () => {
@@ -317,14 +336,22 @@ export default function CreateQuiz() {
                 Results will appear automatically when they finish
               </p>
               <button
-                onClick={() => {
+                onClick={async () => {
                   const quizId = quizLink.split('/').pop();
                   if (quizId) {
-                    const data = localStorage.getItem(`results_${quizId}`);
-                    if (data) {
-                      setQuizResults(JSON.parse(data));
-                    } else {
-                      alert(`No results found yet. Make sure your ${relationLabel.toLowerCase()} has completed the quiz.`);
+                    try {
+                      const response = await fetch(`/api/results?quizId=${quizId}`);
+                      if (response.ok) {
+                        const data = await response.json();
+                        if (data.results) {
+                          setQuizResults(data.results);
+                        } else {
+                          alert(`No results found yet. Make sure your ${relationLabel.toLowerCase()} has completed the quiz.`);
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error checking results:', error);
+                      alert('Error checking results. Please try again.');
                     }
                   }
                 }}
@@ -364,7 +391,6 @@ export default function CreateQuiz() {
             onChange={(e) => setGuesserName(e.target.value)}
           />
           
-          {/* ✅ NEW: Partner or Friend selection */}
           <div className="flex gap-4 mt-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -480,10 +506,11 @@ export default function CreateQuiz() {
         )}
         
         <button
-          className="w-full bg-purple-500 text-white px-6 py-4 rounded-xl text-lg font-semibold hover:bg-purple-600 transition"
+          className="w-full bg-purple-500 text-white px-6 py-4 rounded-xl text-lg font-semibold hover:bg-purple-600 transition disabled:opacity-50"
           onClick={saveQuiz}
+          disabled={saving}
         >
-          🎉 Generate Quiz Link
+          {saving ? '⏳ Saving...' : '🎉 Generate Quiz Link'}
         </button>
       </div>
     </div>
