@@ -42,7 +42,6 @@ export async function GET(request: Request) {
       
       return NextResponse.json({ quiz: result[0] });
     } else {
-      // Get all quizzes for dashboard
       const results = await sql`
         SELECT * FROM quizzes ORDER BY created_at DESC
       `;
@@ -53,6 +52,53 @@ export async function GET(request: Request) {
     console.error('Error fetching quizzes:', error);
     return NextResponse.json(
       { error: 'Failed to fetch quizzes' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Quiz ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    await sql`
+      DELETE FROM quizzes WHERE id = ${id}
+    `;
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting quiz:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete quiz' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, title, questions } = body;
+    
+    await sql`
+      UPDATE quizzes 
+      SET title = ${title}, questions = ${JSON.stringify(questions)}
+      WHERE id = ${id}
+    `;
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error updating quiz:', error);
+    return NextResponse.json(
+      { error: 'Failed to update quiz' },
       { status: 500 }
     );
   }
