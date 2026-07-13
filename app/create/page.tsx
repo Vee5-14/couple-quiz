@@ -1,70 +1,35 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Question {
   id: string;
   text: string;
   options: string[];
-  correctIndex: number;
-}
-
-interface QuizResult {
-  quizId: string;
-  guesserName: string;
-  guesserType: string;
-  answers: number[];
-  score: number;
-  total: number;
-  completedAt: string;
+  correctIndexes: number[]; // Changed to array for multiple correct
+  hasCorrectAnswer: boolean;
+  imageFiles: (File | null)[];
+  imagePreviews: string[];
 }
 
 export default function CreateQuiz() {
+  const [quizTitle, setQuizTitle] = useState('');
+  const [creatorName, setCreatorName] = useState('');
+  const [guesserType, setGuesserType] = useState('partner');
+  const [hasCorrectAnswer, setHasCorrectAnswer] = useState(true);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState({
-    text: 'Which would I prefer?',
+    text: '',
     options: ['', '', '', ''],
-    correctIndex: 0,
+    correctIndexes: [] as number[],
+    hasCorrectAnswer: true,
     imageFiles: [null, null, null, null] as (File | null)[],
     imagePreviews: ['', '', '', ''] as string[],
   });
-  const [creatorName, setCreatorName] = useState('');
-  const [guesserName, setGuesserName] = useState('');
-  const [guesserType, setGuesserType] = useState('partner');
+  const [saving, setSaving] = useState(false);
   const [quizCreated, setQuizCreated] = useState(false);
   const [quizLink, setQuizLink] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const [quizResults, setQuizResults] = useState<QuizResult | null>(null);
-  const [checkingResults, setCheckingResults] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // Check for results every 5 seconds
-  useEffect(() => {
-    if (!quizCreated) return;
-    
-    const quizId = quizLink.split('/').pop();
-    if (!quizId) return;
-    
-    const checkResults = async () => {
-      try {
-        const response = await fetch(`/api/results?quizId=${quizId}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.results) {
-            setQuizResults(data.results);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking results:', error);
-      }
-    };
-    
-    checkResults();
-    const interval = setInterval(checkResults, 5000);
-    
-    return () => clearInterval(interval);
-  }, [quizCreated, quizLink]);
 
   const handleImageUpload = (index: number, file: File) => {
     const reader = new FileReader();
@@ -85,23 +50,45 @@ export default function CreateQuiz() {
     reader.readAsDataURL(file);
   };
 
+  const toggleCorrectAnswer = (index: number) => {
+    if (!hasCorrectAnswer) return; // No correct answer mode
+    
+    setCurrentQuestion(prev => {
+      const newCorrectIndexes = [...prev.correctIndexes];
+      const idx = newCorrectIndexes.indexOf(index);
+      if (idx > -1) {
+        newCorrectIndexes.splice(idx, 1);
+      } else {
+        newCorrectIndexes.push(index);
+      }
+      return { ...prev, correctIndexes: newCorrectIndexes };
+    });
+  };
+
   const addQuestion = () => {
     const validOptions = currentQuestion.options.filter(opt => opt.trim() !== '');
     if (validOptions.length < 2) {
-      alert('Please add at least 2 options with images or text');
+      alert('Please add at least 2 options');
+      return;
+    }
+    
+    if (hasCorrectAnswer && currentQuestion.correctIndexes.length === 0) {
+      alert('Please select at least one correct answer');
       return;
     }
     
     setQuestions([...questions, { 
       ...currentQuestion, 
       id: uuidv4(),
-      options: currentQuestion.options.filter(opt => opt.trim() !== '')
+      options: currentQuestion.options.filter(opt => opt.trim() !== ''),
+      hasCorrectAnswer: hasCorrectAnswer,
     }]);
     
     setCurrentQuestion({
-      text: 'Which would I prefer?',
+      text: '',
       options: ['', '', '', ''],
-      correctIndex: 0,
+      correctIndexes: [],
+      hasCorrectAnswer: true,
       imageFiles: [null, null, null, null],
       imagePreviews: ['', '', '', ''],
     });
@@ -119,6 +106,11 @@ export default function CreateQuiz() {
       return;
     }
     
+    if (!quizTitle.trim()) {
+      alert('Please give your quiz a title');
+      return;
+    }
+    
     setSaving(true);
     
     try {
@@ -126,24 +118,23 @@ export default function CreateQuiz() {
       const quizData = {
         id: quizId,
         creator: creatorName || 'Someone',
-        guesser: guesserName || (guesserType === 'partner' ? 'Partner' : 'Friend'),
+        title: quizTitle,
         guesserType: guesserType,
-        questions: questions,
+        hasCorrectAnswer: hasCorrectAnswer,
+        questions: questions.map(q => ({
+          ...q,
+          imageFiles: undefined,
+        })),
         createdAt: new Date().toISOString()
       };
       
-      // Save to database via API
       const response = await fetch('/api/quizzes', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(quizData),
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to save quiz');
-      }
+      if (!response.ok) throw new Error('Failed to save quiz');
       
       const url = `${window.location.origin}/quiz/${quizId}`;
       setQuizLink(url);
@@ -173,113 +164,11 @@ export default function CreateQuiz() {
     }
   };
 
-  const handleViewResults = () => {
-    setShowResults(true);
+  const removeQuestion = (index: number) => {
+    setQuestions(questions.filter((_, i) => i !== index));
   };
-
-  const getRelationLabel = () => {
-    return guesserType === 'partner' ? 'Partner' : 'Friend';
-  };
-
-  const getResultsLabel = () => {
-    return guesserType === 'partner' ? "Partner's Results" : "Friend's Results";
-  };
-
-  if (showResults && quizResults) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-center mb-4 text-purple-600">
-            📊 {getResultsLabel()}
-          </h1>
-          <div className="text-center mb-8">
-            <div className="text-6xl font-bold text-purple-500">
-              {quizResults.score}/{quizResults.total}
-            </div>
-            <div className="text-xl text-gray-700 mt-2">
-              {quizResults.score === quizResults.total ? 'Perfect! They know you so well! 💜' :
-               quizResults.score >= quizResults.total * 0.7 ? 'Pretty good! They pay attention! 😊' :
-               'They need to spend more time with you! 😄'}
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            {quizResults.answers.map((answer, index) => {
-              const question = questions[index];
-              if (!question) return null;
-              const isCorrect = answer === question.correctIndex;
-              const selectedOption = question.options[answer];
-              const correctOption = question.options[question.correctIndex];
-              const isSelectedImage = selectedOption && selectedOption.startsWith('data:image');
-              const isCorrectImage = correctOption && correctOption.startsWith('data:image');
-              
-              return (
-                <div key={index} className={`p-4 rounded-lg ${isCorrect ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <div className="font-semibold text-gray-800 mb-2">Q{index+1}: {question.text}</div>
-                  
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex-1 min-w-[100px]">
-                      <div className="text-xs text-gray-500 mb-1">Their answer:</div>
-                      {isSelectedImage ? (
-                        <img 
-                          src={selectedOption} 
-                          alt="Their choice" 
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
-                        />
-                      ) : (
-                        <div className="font-medium text-gray-700">{selectedOption || 'Option ' + (answer + 1)}</div>
-                      )}
-                    </div>
-                    
-                    <div className="text-gray-400 text-xl font-bold">VS</div>
-                    
-                    <div className="flex-1 min-w-[100px]">
-                      <div className="text-xs text-gray-500 mb-1">Correct answer:</div>
-                      {isCorrectImage ? (
-                        <img 
-                          src={correctOption} 
-                          alt="Correct answer" 
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-green-500"
-                        />
-                      ) : (
-                        <div className="font-medium text-green-700">{correctOption || 'Option ' + (question.correctIndex + 1)}</div>
-                      )}
-                    </div>
-                    
-                    <div className="text-2xl">
-                      {isCorrect ? '✅' : '❌'}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          <div className="flex gap-4 mt-6">
-            <button 
-              className="flex-1 bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600"
-              onClick={() => {
-                setShowResults(false);
-                window.location.href = '/';
-              }}
-            >
-              🏠 Back to Home
-            </button>
-            <button 
-              className="flex-1 bg-gray-500 text-white px-6 py-3 rounded-xl hover:bg-gray-600"
-              onClick={() => setShowResults(false)}
-            >
-              📝 Back to Quiz
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (quizCreated) {
-    const relationLabel = getRelationLabel();
-    
     return (
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-blue-100 p-4 flex items-center justify-center">
         <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8 text-center">
@@ -288,7 +177,7 @@ export default function CreateQuiz() {
             Quiz Created Successfully!
           </h1>
           <p className="text-gray-700 mb-6">
-            Share this link with your {guesserName || relationLabel.toLowerCase()} to see how well they know you!
+            Share this link with others to take your quiz!
           </p>
           
           <div className="bg-gray-100 p-4 rounded-xl mb-6 break-all">
@@ -299,25 +188,17 @@ export default function CreateQuiz() {
             <button
               onClick={copyToClipboard}
               className={`flex-1 px-6 py-3 rounded-xl text-lg font-semibold transition ${
-                copied 
-                  ? 'bg-green-500 text-white' 
-                  : 'bg-purple-500 text-white hover:bg-purple-600'
+                copied ? 'bg-green-500 text-white' : 'bg-purple-500 text-white hover:bg-purple-600'
               }`}
             >
               {copied ? '✅ Copied!' : '📋 Copy Link'}
             </button>
-            
-            <button
-              onClick={handleViewResults}
-              className={`flex-1 px-6 py-3 rounded-xl text-lg font-semibold transition ${
-                quizResults 
-                  ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              disabled={!quizResults}
+            <a
+              href="/dashboard"
+              className="flex-1 bg-blue-500 text-white px-6 py-3 rounded-xl text-lg font-semibold hover:bg-blue-600 transition text-center"
             >
-              📊 View {getResultsLabel()} {quizResults && `(${quizResults.score}/${quizResults.total})`}
-            </button>
+              📊 Dashboard
+            </a>
           </div>
           
           <button
@@ -326,41 +207,6 @@ export default function CreateQuiz() {
           >
             🏠 Back to Home
           </button>
-          
-          {!quizResults && (
-            <div className="mt-4">
-              <p className="text-sm text-gray-500">
-                ⏳ Waiting for your {guesserName || relationLabel.toLowerCase()} to complete the quiz...
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Results will appear automatically when they finish
-              </p>
-              <button
-                onClick={async () => {
-                  const quizId = quizLink.split('/').pop();
-                  if (quizId) {
-                    try {
-                      const response = await fetch(`/api/results?quizId=${quizId}`);
-                      if (response.ok) {
-                        const data = await response.json();
-                        if (data.results) {
-                          setQuizResults(data.results);
-                        } else {
-                          alert(`No results found yet. Make sure your ${relationLabel.toLowerCase()} has completed the quiz.`);
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Error checking results:', error);
-                      alert('Error checking results. Please try again.');
-                    }
-                  }
-                }}
-                className="mt-2 text-purple-500 text-sm hover:underline"
-              >
-                🔄 Check for results now
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -373,8 +219,18 @@ export default function CreateQuiz() {
           📝 Create Your Quiz
         </h1>
         
+        {/* Quiz Settings */}
         <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-          <p className="text-sm text-gray-500 mb-3">Names are optional ✨</p>
+          <h2 className="font-semibold mb-4 text-gray-800">Quiz Settings</h2>
+          
+          <input
+            type="text"
+            placeholder="Quiz Title (e.g., 'How Well Do You Know Me?')"
+            className="w-full p-3 border rounded-lg mb-3 text-gray-800"
+            value={quizTitle}
+            onChange={(e) => setQuizTitle(e.target.value)}
+          />
+          
           <input
             type="text"
             placeholder="Your name (optional)"
@@ -383,15 +239,7 @@ export default function CreateQuiz() {
             onChange={(e) => setCreatorName(e.target.value)}
           />
           
-          <input
-            type="text"
-            placeholder="Who is this for? (e.g. partner's name or friend's name)"
-            className="w-full p-3 border rounded-lg mb-3 text-gray-800"
-            value={guesserName}
-            onChange={(e) => setGuesserName(e.target.value)}
-          />
-          
-          <div className="flex gap-4 mt-2">
+          <div className="flex gap-4 mb-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
@@ -415,14 +263,44 @@ export default function CreateQuiz() {
               <span className="text-gray-700">🤝 Friend</span>
             </label>
           </div>
+          
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="answerMode"
+                checked={hasCorrectAnswer === true}
+                onChange={() => setHasCorrectAnswer(true)}
+                className="w-4 h-4 text-purple-500"
+              />
+              <span className="text-gray-700">✅ Has Correct Answer</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="answerMode"
+                checked={hasCorrectAnswer === false}
+                onChange={() => setHasCorrectAnswer(false)}
+                className="w-4 h-4 text-purple-500"
+              />
+              <span className="text-gray-700">🔍 Preference Only (No Correct)</span>
+            </label>
+          </div>
+          
+          {hasCorrectAnswer && (
+            <p className="text-sm text-gray-500 mt-2">
+              💡 Select one or more correct answers for each question
+            </p>
+          )}
         </div>
         
+        {/* Add Question Form */}
         <div className="bg-white p-6 rounded-xl shadow-md mb-6">
           <h2 className="font-semibold mb-4 text-gray-800">Add a Question</h2>
           
           <input
             type="text"
-            placeholder="Question text (e.g. 'Which dessert would I prefer?')"
+            placeholder="Question text"
             className="w-full p-3 border rounded-lg mb-4 text-gray-800"
             value={currentQuestion.text}
             onChange={(e) => setCurrentQuestion({...currentQuestion, text: e.target.value})}
@@ -471,19 +349,27 @@ export default function CreateQuiz() {
                   onChange={(e) => handleOptionChange(index, e.target.value)}
                 />
                 
-                <button
-                  className={`mt-2 w-full text-sm px-3 py-2 rounded ${
-                    currentQuestion.correctIndex === index 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-gray-200 text-gray-700'
-                  }`}
-                  onClick={() => setCurrentQuestion({...currentQuestion, correctIndex: index})}
-                >
-                  {currentQuestion.correctIndex === index ? '✅ Correct Answer' : 'Set as correct'}
-                </button>
+                {hasCorrectAnswer && (
+                  <button
+                    className={`mt-2 w-full text-sm px-3 py-2 rounded ${
+                      currentQuestion.correctIndexes.includes(index) 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-200 text-gray-700'
+                    }`}
+                    onClick={() => toggleCorrectAnswer(index)}
+                  >
+                    {currentQuestion.correctIndexes.includes(index) ? '✅ Correct' : 'Mark as correct'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
+          
+          {hasCorrectAnswer && currentQuestion.correctIndexes.length > 0 && (
+            <p className="text-sm text-green-600 mt-2">
+              ✅ {currentQuestion.correctIndexes.length} option(s) marked as correct
+            </p>
+          )}
           
           <button
             className="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
@@ -493,24 +379,38 @@ export default function CreateQuiz() {
           </button>
         </div>
         
+        {/* Question List */}
         {questions.length > 0 && (
           <div className="bg-white p-6 rounded-xl shadow-md mb-6">
             <h2 className="font-semibold mb-4 text-gray-800">Your Questions ({questions.length})</h2>
             {questions.map((q, i) => (
-              <div key={i} className="border-b py-2 text-gray-700">
-                <span className="font-medium">Q{i+1}:</span> {q.text}
-                <span className="text-sm text-gray-400 ml-2">({q.options.length} options)</span>
+              <div key={i} className="border-b py-3 flex justify-between items-center">
+                <div>
+                  <div className="font-medium text-gray-800">Q{i+1}: {q.text}</div>
+                  <div className="text-sm text-gray-500">
+                    {q.hasCorrectAnswer 
+                      ? `✅ ${q.correctIndexes.length} correct answer(s)`
+                      : '🔍 No correct answer (preference only)'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeQuestion(i)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  🗑️
+                </button>
               </div>
             ))}
           </div>
         )}
         
+        {/* Save Button */}
         <button
           className="w-full bg-purple-500 text-white px-6 py-4 rounded-xl text-lg font-semibold hover:bg-purple-600 transition disabled:opacity-50"
           onClick={saveQuiz}
-          disabled={saving}
+          disabled={saving || questions.length === 0}
         >
-          {saving ? '⏳ Saving...' : '🎉 Generate Quiz Link'}
+          {saving ? '⏳ Saving...' : '🎉 Save Quiz'}
         </button>
       </div>
     </div>

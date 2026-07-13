@@ -4,13 +4,15 @@ import { useState, useEffect, use } from 'react';
 interface QuizData {
   id: string;
   creator: string;
-  guesser: string;
+  title: string;
   guesser_type: string;
+  has_correct_answer: boolean;
   questions: {
     id: string;
     text: string;
     options: string[];
-    correctIndex: number;
+    correctIndexes: number[];
+    hasCorrectAnswer: boolean;
   }[];
   created_at: string;
 }
@@ -22,9 +24,11 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [resultsSaved, setResultsSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState('');
+  const [started, setStarted] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -44,7 +48,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         
         const data = await response.json();
         setQuiz(data.quiz);
-        setAnswers(new Array(data.quiz.questions.length).fill(null));
+        setAnswers(new Array(data.quiz.questions.length).fill(-1));
         setLoading(false);
       } catch (error) {
         console.error('Error fetching quiz:', error);
@@ -57,51 +61,57 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   }, [id]);
 
   const handleAnswer = (optionIndex: number) => {
-    if (!quiz) return;
+    if (hasSubmitted) return;
+    
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = optionIndex;
     setAnswers(newAnswers);
-    
-    if (currentQuestion < quiz.questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    } else {
-      saveResults(newAnswers);
-      setShowResults(true);
+  };
+
+  const goToPrevious = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(currentQuestion - 1);
     }
   };
 
-  const saveResults = async (finalAnswers: number[]) => {
+  const goToNext = () => {
+    if (currentQuestion < (quiz?.questions.length || 0) - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    }
+  };
+
+  const submitQuiz = async () => {
     if (!quiz) return;
     
-    let correct = 0;
-    quiz.questions.forEach((q, i) => {
-      if (finalAnswers[i] === q.correctIndex) correct++;
-    });
-    
-    const results = {
-      quizId: quiz.id,
-      guesserName: quiz.guesser || 'Partner',
-      answers: finalAnswers,
-      score: correct,
-      total: quiz.questions.length
-    };
+    // Check if all questions answered
+    const unanswered = answers.some(a => a === -1);
+    if (unanswered) {
+      alert('Please answer all questions before submitting.');
+      return;
+    }
     
     try {
       const response = await fetch('/api/results', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(results),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId: quiz.id,
+          participantName: participantName || 'Anonymous',
+          answers: answers,
+          hasCorrectAnswer: quiz.has_correct_answer,
+          questions: quiz.questions,
+        }),
       });
       
       if (response.ok) {
-        setResultsSaved(true);
+        setHasSubmitted(true);
+        setShowResults(true);
       } else {
-        console.error('Failed to save results');
+        alert('Failed to submit. Please try again.');
       }
     } catch (error) {
-      console.error('Error saving results:', error);
+      console.error('Error submitting:', error);
+      alert('Failed to submit. Please try again.');
     }
   };
 
@@ -137,20 +147,53 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       </div>
     );
   }
-  
+
+  if (!started) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+          <h1 className="text-3xl font-bold text-purple-600 mb-4">
+            💜 {quiz.title || 'Quiz'}
+          </h1>
+          <p className="text-gray-700 mb-6">
+            Created by {quiz.creator || 'Someone'} for their {getRelationLabel().toLowerCase()}
+          </p>
+          
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder="Your name (optional)"
+              className="w-full p-3 border rounded-lg text-gray-800"
+              value={participantName}
+              onChange={(e) => setParticipantName(e.target.value)}
+            />
+          </div>
+          
+          <button
+            onClick={() => setStarted(true)}
+            className="w-full bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600 transition text-lg font-semibold"
+          >
+            🚀 Start Quiz
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (showResults) {
+    const total = quiz.questions.length;
     let correct = 0;
-    const results = quiz.questions.map((q, i) => {
-      const isCorrect = answers[i] === q.correctIndex;
-      if (isCorrect) correct++;
-      return {
-        ...q,
-        selected: answers[i],
-        correct: isCorrect
-      };
-    });
     
-    const relationLabel = getRelationLabel();
+    if (quiz.has_correct_answer) {
+      quiz.questions.forEach((q, i) => {
+        if (q.correctIndexes.includes(answers[i])) {
+          correct++;
+        }
+      });
+    } else {
+      // For preference mode, just show what they chose
+      correct = answers.filter(a => a !== -1).length;
+    }
     
     return (
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-blue-100 p-4">
@@ -158,31 +201,33 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           <h1 className="text-3xl font-bold text-center mb-4 text-purple-600">
             🎉 Results!
           </h1>
-          <div className="text-center mb-8">
-            <div className="text-6xl font-bold text-purple-500">
-              {correct}/{quiz.questions.length}
+          
+          {quiz.has_correct_answer && (
+            <div className="text-center mb-8">
+              <div className="text-6xl font-bold text-purple-500">
+                {correct}/{total}
+              </div>
+              <div className="text-xl text-gray-700 mt-2">
+                {correct === total ? `Perfect! You know ${quiz.creator || 'them'} so well! 💜` :
+                 correct >= total * 0.7 ? 'Pretty good! You pay attention! 😊' :
+                 'You need to spend more time together! 😄'}
+              </div>
             </div>
-            <div className="text-xl text-gray-700 mt-2">
-              {correct === quiz.questions.length ? `Perfect! You know your ${relationLabel.toLowerCase()} so well! 💜` :
-               correct >= quiz.questions.length * 0.7 ? `Pretty good! You pay attention! 😊` :
-               `You need to spend more time with your ${relationLabel.toLowerCase()}! 😄`}
-            </div>
-          </div>
+          )}
           
           <div className="space-y-4">
-            {results.map((q, i) => {
-              const selectedOption = q.options[q.selected];
-              const correctOption = q.options[q.correctIndex];
-              const isSelectedImage = selectedOption && selectedOption.startsWith('data:image');
-              const isCorrectImage = correctOption && correctOption.startsWith('data:image');
+            {quiz.questions.map((q, i) => {
+              const selectedOption = q.options[answers[i]];
+              const isSelectedImage = selectedOption?.startsWith('data:image');
+              const isCorrect = q.correctIndexes.includes(answers[i]);
               
               return (
-                <div key={i} className={`p-4 rounded-lg ${q.correct ? 'bg-green-100' : 'bg-red-100'}`}>
+                <div key={i} className={`p-4 rounded-lg ${quiz.has_correct_answer ? (isCorrect ? 'bg-green-100' : 'bg-red-100') : 'bg-blue-100'}`}>
                   <div className="font-semibold text-gray-800 mb-2">Q{i+1}: {q.text}</div>
                   
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex-1 min-w-[100px]">
-                      <div className="text-xs text-gray-500 mb-1">Your choice:</div>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <div className="text-xs text-gray-500">Your choice:</div>
                       {isSelectedImage ? (
                         <img 
                           src={selectedOption} 
@@ -190,28 +235,15 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                           className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
                         />
                       ) : (
-                        <div className="font-medium text-gray-700">{selectedOption || 'Option ' + (q.selected + 1)}</div>
+                        <div className="font-medium text-gray-700">{selectedOption || 'Not answered'}</div>
                       )}
                     </div>
                     
-                    <div className="text-gray-400 text-xl font-bold">VS</div>
-                    
-                    <div className="flex-1 min-w-[100px]">
-                      <div className="text-xs text-gray-500 mb-1">Correct answer:</div>
-                      {isCorrectImage ? (
-                        <img 
-                          src={correctOption} 
-                          alt="Correct answer" 
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-green-500"
-                        />
-                      ) : (
-                        <div className="font-medium text-green-700">{correctOption || 'Option ' + (q.correctIndex + 1)}</div>
-                      )}
-                    </div>
-                    
-                    <div className="text-2xl">
-                      {q.correct ? '✅' : '❌'}
-                    </div>
+                    {quiz.has_correct_answer && (
+                      <div className="text-2xl">
+                        {isCorrect ? '✅' : '❌'}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -225,23 +257,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             >
               🏠 Back to Home
             </button>
-            <button 
-              className="flex-1 bg-blue-500 text-white px-6 py-3 rounded-xl hover:bg-blue-600"
-              onClick={() => {
-                setShowResults(false);
-                setCurrentQuestion(0);
-                setAnswers(new Array(quiz.questions.length).fill(null));
-              }}
-            >
-              🔄 Retry Quiz
-            </button>
           </div>
-          
-          {resultsSaved && (
-            <p className="text-sm text-green-600 text-center mt-4">
-              ✅ Results saved! {quiz.creator || 'Quiz creator'} can now view them.
-            </p>
-          )}
         </div>
       </div>
     );
@@ -249,13 +265,20 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   const q = quiz.questions[currentQuestion];
   const validOptions = q.options.filter(opt => opt && opt.trim() !== '');
+  const isAnswered = answers[currentQuestion] !== -1;
   
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4">
       <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-sm text-gray-600 mb-4">
-          Question {currentQuestion + 1} of {quiz.questions.length}
+        <div className="flex justify-between items-center mb-4">
+          <div className="text-sm text-gray-600">
+            Question {currentQuestion + 1} of {quiz.questions.length}
+          </div>
+          <div className="text-sm text-gray-600">
+            {answers.filter(a => a !== -1).length} / {quiz.questions.length} answered
+          </div>
         </div>
+        
         <div className="w-full bg-gray-200 h-2 rounded-full mb-6">
           <div 
             className="bg-purple-500 h-2 rounded-full transition-all"
@@ -267,17 +290,23 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           {q.text}
         </h2>
         <p className="text-center text-sm text-gray-500 mb-6">
-          Choose the answer that best matches {quiz.creator || 'the creator'}
+          {quiz.has_correct_answer ? 'Select the correct answer(s)' : 'Select your preference'}
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {validOptions.map((option, index) => {
             const originalIndex = q.options.indexOf(option);
             const isImage = option && option.startsWith('data:image');
+            const selected = answers[currentQuestion] === originalIndex;
+            
             return (
               <button
                 key={index}
-                className="border-2 rounded-xl p-4 hover:border-purple-500 transition hover:shadow-lg hover:bg-purple-50"
+                className={`border-2 rounded-xl p-4 transition hover:shadow-lg ${
+                  selected 
+                    ? 'border-purple-500 bg-purple-50' 
+                    : 'hover:border-purple-300 hover:bg-purple-50'
+                }`}
                 onClick={() => handleAnswer(originalIndex)}
               >
                 {isImage ? (
@@ -292,10 +321,55 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                 ) : (
                   <div className="text-lg font-medium text-gray-800 py-4">{option}</div>
                 )}
+                {selected && (
+                  <div className="text-sm text-purple-600 font-semibold mt-1">✅ Selected</div>
+                )}
               </button>
             );
           })}
         </div>
+        
+        <div className="flex gap-4 mt-6">
+          <button
+            onClick={goToPrevious}
+            className={`flex-1 px-4 py-2 rounded-lg ${
+              currentQuestion > 0 
+                ? 'bg-gray-500 text-white hover:bg-gray-600' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+            disabled={currentQuestion === 0}
+          >
+            ⬅ Previous
+          </button>
+          
+          {currentQuestion === quiz.questions.length - 1 ? (
+            <button
+              onClick={submitQuiz}
+              className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+              disabled={!isAnswered}
+            >
+              📤 Submit Quiz
+            </button>
+          ) : (
+            <button
+              onClick={goToNext}
+              className={`flex-1 px-4 py-2 rounded-lg ${
+                isAnswered 
+                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+              disabled={!isAnswered}
+            >
+              Next ➡
+            </button>
+          )}
+        </div>
+        
+        {!isAnswered && (
+          <p className="text-sm text-amber-600 text-center mt-2">
+            ⚠️ Please select an option to continue
+          </p>
+        )}
       </div>
     </div>
   );
