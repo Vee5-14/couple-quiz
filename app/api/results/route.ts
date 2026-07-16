@@ -3,10 +3,16 @@ import { sql } from '@/app/lib/database';
 
 export async function POST(request: Request) {
   try {
+    if (!sql) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { quizId, participantName, answers, hasCorrectAnswer, questions } = body;
     
-    // Check if participant already exists
     let participantResult = await sql`
       SELECT id FROM participants 
       WHERE quiz_id = ${quizId} AND name = ${participantName || 'Anonymous'} AND completed = false
@@ -15,7 +21,6 @@ export async function POST(request: Request) {
     let participantId;
     
     if (participantResult.length === 0) {
-      // Create new participant
       const newParticipant = await sql`
         INSERT INTO participants (quiz_id, name, completed)
         VALUES (${quizId}, ${participantName || 'Anonymous'}, true)
@@ -24,7 +29,6 @@ export async function POST(request: Request) {
       participantId = newParticipant[0].id;
     } else {
       participantId = participantResult[0].id;
-      // Update participant to completed
       await sql`
         UPDATE participants 
         SET completed = true, completed_at = NOW()
@@ -32,21 +36,19 @@ export async function POST(request: Request) {
       `;
     }
     
-    // Calculate score if there's a correct answer
     let score = 0;
-    let total = questions.length;
+    let total = questions ? questions.length : 0;
     
-    if (hasCorrectAnswer) {
+    if (hasCorrectAnswer && questions) {
       questions.forEach((q: any, i: number) => {
-        if (q.correctIndexes.includes(answers[i])) {
+        if (q.correctIndexes && q.correctIndexes.includes(answers[i])) {
           score++;
         }
       });
-    } else {
+    } else if (answers) {
       score = answers.filter((a: number) => a !== -1).length;
     }
     
-    // Save results (only first attempt)
     await sql`
       INSERT INTO results (quiz_id, participant_id, answers, score, total, is_first_attempt)
       VALUES (${quizId}, ${participantId}, ${JSON.stringify(answers)}, ${score}, ${total}, true)
@@ -64,6 +66,17 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    if (!sql) {
+      // Return empty results during build time
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ results: [] });
+      }
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     const url = new URL(request.url);
     const quizId = url.searchParams.get('quizId');
     const all = url.searchParams.get('all') === 'true';
@@ -76,7 +89,6 @@ export async function GET(request: Request) {
     }
     
     if (all) {
-      // Get all results for dashboard
       const results = await sql`
         SELECT 
           r.id,
@@ -93,7 +105,6 @@ export async function GET(request: Request) {
       
       return NextResponse.json({ results });
     } else {
-      // Get single result (latest)
       const result = await sql`
         SELECT * FROM results 
         WHERE quiz_id = ${quizId}

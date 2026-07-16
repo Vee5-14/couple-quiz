@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
 import { sql, createTables } from '@/app/lib/database';
 
-createTables();
+// Only create tables if we have a database connection
+if (sql) {
+  createTables();
+}
 
 export async function POST(request: Request) {
   try {
+    if (!sql) {
+      return NextResponse.json(
+        { error: 'Database not configured. Please set DATABASE_URL.' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { id, creator, title, guesserType, hasCorrectAnswer, questions } = body;
     
@@ -25,6 +35,17 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    if (!sql) {
+      // Return empty data during build time
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ quizzes: [] });
+      }
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     
@@ -59,6 +80,13 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    if (!sql) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     
@@ -85,6 +113,13 @@ export async function DELETE(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    if (!sql) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { id, title, questions } = body;
     

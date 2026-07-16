@@ -1,32 +1,47 @@
 import { neon } from '@neondatabase/serverless';
 
+// Log status (without exposing the full URL)
+console.log('🔍 Checking DATABASE_URL...');
+console.log('📌 DATABASE_URL exists:', !!process.env.DATABASE_URL);
+
 const databaseUrl = process.env.DATABASE_URL || process.env.STORAGE_URL;
 
 if (!databaseUrl) {
-  console.error('❌ DATABASE_URL not found in environment variables');
-  throw new Error('DATABASE_URL is required');
+  console.warn('⚠️ DATABASE_URL not found. API routes will fail if accessed.');
 }
 
-const sql = neon(databaseUrl);
+let sql: any = null;
+
+if (databaseUrl) {
+  try {
+    sql = neon(databaseUrl);
+    console.log('✅ Database client initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize database client:', error);
+  }
+}
 
 export async function createTables() {
+  if (!sql) {
+    console.warn('⚠️ Skipping table creation - no database connection');
+    return;
+  }
+  
   try {
     console.log('📦 Creating tables...');
     
-    // Quizzes table - updated with new fields
     await sql`
       CREATE TABLE IF NOT EXISTS quizzes (
         id TEXT PRIMARY KEY,
         creator TEXT,
         title TEXT DEFAULT 'Untitled Quiz',
         guesser_type TEXT DEFAULT 'partner',
-        questions JSONB,
         has_correct_answer BOOLEAN DEFAULT true,
+        questions JSONB,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `;
 
-    // Participants table - track who took the quiz
     await sql`
       CREATE TABLE IF NOT EXISTS participants (
         id SERIAL PRIMARY KEY,
@@ -39,15 +54,14 @@ export async function createTables() {
       );
     `;
 
-    // Results table - store answers
     await sql`
       CREATE TABLE IF NOT EXISTS results (
         id SERIAL PRIMARY KEY,
         quiz_id TEXT REFERENCES quizzes(id) ON DELETE CASCADE,
         participant_id INT REFERENCES participants(id),
         answers JSONB,
-        score INT,
-        total INT,
+        score INT DEFAULT 0,
+        total INT DEFAULT 0,
         is_first_attempt BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW()
       );
@@ -57,6 +71,11 @@ export async function createTables() {
   } catch (error) {
     console.error('❌ Error creating tables:', error);
   }
+}
+
+// Only create tables if we have a connection
+if (sql) {
+  createTables();
 }
 
 export { sql };
