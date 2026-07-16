@@ -1,45 +1,49 @@
 @import "tailwindcss";
 
-/* --- Add Tailwind's base styles and utilities --- */
-/* The @import above now handles everything that used to be @tailwind directives in v3 */
-
-/* --- Custom styles using CSS (not @apply where possible) --- */
-/* For custom classes, we can define them directly with CSS */
-
-.btn-primary {
-  background-color: var(--color-purple-500, #8b5cf6);
-  color: #fff;
-  font-weight: 600;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
-  transition: all 0.2s;
-  display: inline-block;
-  text-align: center;
-}
-.btn-primary:hover {
-  background-color: var(--color-purple-600, #7c3aed);
+/* Base styles */
+@layer base {
+  body {
+    color: #1a1a1a;
+    background-color: #ffffff;
+  }
+  
+  .dark body {
+    color: #f3f4f6;
+    background-color: #111827;
+  }
 }
 
-.card {
-  background-color: #fff;
-  border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  padding: 1.5rem;
-  transition: all 0.2s;
-}
-.card:hover {
-  box-shadow: 0 25px 30px -5px rgb(0 0 0 / 0.15);
+/* Components */
+@layer components {
+  .btn-primary {
+    background-color: #7c3aed;
+    color: #ffffff;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .btn-primary:hover {
+    background-color: #6d28d9;
+  }
+  
+  .card {
+    background-color: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.15);
+  }
+  
+  .dark .card {
+    background-color: #1f2937;
+  }
 }
 
-/* Dark mode overrides using CSS variables */
-.dark .card {
-  background-color: #1f2937;
+/* Smooth transitions for theme switching */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
-
-.dark body {
-  background-color: #111827;
-  color: #f3f4f6;
-}
-
-/* For @apply to work in this file, we would need @reference "tailwindcss"; */
-/* However, the best practice in v4 is to use CSS directly as shown above. */
