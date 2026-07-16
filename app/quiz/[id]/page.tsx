@@ -83,7 +83,6 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const submitQuiz = async () => {
     if (!quiz) return;
     
-    // Check if all questions answered
     const unanswered = answers.some(a => a === -1);
     if (unanswered) {
       alert('Please answer all questions before submitting.');
@@ -121,10 +120,10 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="min-h-screen bg-gray-900 p-4 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-xl p-8 text-center border border-purple-500/20">
           <div className="text-4xl mb-4">⏳</div>
-          <h2 className="text-2xl font-bold text-gray-800">Loading quiz...</h2>
+          <h2 className="text-2xl font-bold text-gray-300">Loading quiz...</h2>
         </div>
       </div>
     );
@@ -132,13 +131,13 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   if (error || !quiz) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="min-h-screen bg-gray-900 p-4 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-xl p-8 text-center border border-purple-500/20">
           <div className="text-6xl mb-4">🔍</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Not Found</h2>
-          <p className="text-gray-600">{error || 'This quiz might have been deleted or the link is incorrect.'}</p>
+          <h2 className="text-2xl font-bold text-gray-300 mb-2">Quiz Not Found</h2>
+          <p className="text-gray-400">{error || 'This quiz might have been deleted or the link is incorrect.'}</p>
           <button 
-            className="mt-4 bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600"
+            className="mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
             onClick={() => window.location.href = '/'}
           >
             🏠 Back to Home
@@ -150,12 +149,12 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
   if (!started) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4 flex items-center justify-center">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
-          <h1 className="text-3xl font-bold text-purple-600 mb-4">
+      <div className="min-h-screen bg-gray-900 p-4 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-xl p-8 text-center border border-purple-500/20">
+          <h1 className="text-3xl font-bold text-purple-400 mb-4">
             💜 {quiz.title || 'Quiz'}
           </h1>
-          <p className="text-gray-700 mb-6">
+          <p className="text-gray-300 mb-6">
             Created by {quiz.creator || 'Someone'} for their {getRelationLabel().toLowerCase()}
           </p>
           
@@ -163,7 +162,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             <input
               type="text"
               placeholder="Your name (optional)"
-              className="w-full p-3 border rounded-lg text-gray-800"
+              className="w-full p-3 border border-gray-600 rounded-lg text-white bg-gray-700"
               value={participantName}
               onChange={(e) => setParticipantName(e.target.value)}
             />
@@ -171,7 +170,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           
           <button
             onClick={() => setStarted(true)}
-            className="w-full bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600 transition text-lg font-semibold"
+            className="w-full bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition text-lg font-semibold"
           >
             🚀 Start Quiz
           </button>
@@ -191,23 +190,22 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         }
       });
     } else {
-      // For preference mode, just show what they chose
       correct = answers.filter(a => a !== -1).length;
     }
     
     return (
-      <div className="min-h-screen bg-gradient-to-b from-green-100 to-blue-100 p-4">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-center mb-4 text-purple-600">
+      <div className="min-h-screen bg-gray-900 p-4">
+        <div className="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-xl p-8 border border-purple-500/20">
+          <h1 className="text-3xl font-bold text-center mb-4 text-purple-400">
             🎉 Results!
           </h1>
           
           {quiz.has_correct_answer && (
             <div className="text-center mb-8">
-              <div className="text-6xl font-bold text-purple-500">
+              <div className="text-6xl font-bold text-purple-400">
                 {correct}/{total}
               </div>
-              <div className="text-xl text-gray-700 mt-2">
+              <div className="text-xl text-gray-300 mt-2">
                 {correct === total ? `Perfect! You know ${quiz.creator || 'them'} so well! 💜` :
                  correct >= total * 0.7 ? 'Pretty good! You pay attention! 😊' :
                  'You need to spend more time together! 😄'}
@@ -222,20 +220,20 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               const isCorrect = q.correctIndexes.includes(answers[i]);
               
               return (
-                <div key={i} className={`p-4 rounded-lg ${quiz.has_correct_answer ? (isCorrect ? 'bg-green-100' : 'bg-red-100') : 'bg-blue-100'}`}>
-                  <div className="font-semibold text-gray-800 mb-2">Q{i+1}: {q.text}</div>
+                <div key={i} className={`p-4 rounded-lg ${quiz.has_correct_answer ? (isCorrect ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700') : 'bg-blue-900/30 border border-blue-700'}`}>
+                  <div className="font-semibold text-gray-200 mb-2">Q{i+1}: {q.text}</div>
                   
                   <div className="flex items-center gap-4">
                     <div>
-                      <div className="text-xs text-gray-500">Your choice:</div>
+                      <div className="text-xs text-gray-400">Your choice:</div>
                       {isSelectedImage ? (
                         <img 
                           src={selectedOption} 
                           alt="Your choice" 
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
+                          className="w-20 h-20 object-cover rounded-lg border-2 border-gray-600"
                         />
                       ) : (
-                        <div className="font-medium text-gray-700">{selectedOption || 'Not answered'}</div>
+                        <div className="font-medium text-gray-300">{selectedOption || 'Not answered'}</div>
                       )}
                     </div>
                     
@@ -252,7 +250,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           
           <div className="flex gap-4 mt-6">
             <button 
-              className="flex-1 bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600"
+              className="flex-1 bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700"
               onClick={() => window.location.href = '/'}
             >
               🏠 Back to Home
@@ -268,28 +266,28 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const isAnswered = answers[currentQuestion] !== -1;
   
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-100 to-pink-100 p-4">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8">
+    <div className="min-h-screen bg-gray-900 p-4">
+      <div className="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-xl p-8 border border-purple-500/20">
         <div className="flex justify-between items-center mb-4">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-400">
             Question {currentQuestion + 1} of {quiz.questions.length}
           </div>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-400">
             {answers.filter(a => a !== -1).length} / {quiz.questions.length} answered
           </div>
         </div>
         
-        <div className="w-full bg-gray-200 h-2 rounded-full mb-6">
+        <div className="w-full bg-gray-700 h-2 rounded-full mb-6">
           <div 
             className="bg-purple-500 h-2 rounded-full transition-all"
             style={{ width: `${((currentQuestion) / quiz.questions.length) * 100}%` }}
           />
         </div>
         
-        <h2 className="text-2xl font-bold text-center mb-2 text-gray-800">
+        <h2 className="text-2xl font-bold text-center mb-2 text-gray-200">
           {q.text}
         </h2>
-        <p className="text-center text-sm text-gray-500 mb-6">
+        <p className="text-center text-sm text-gray-400 mb-6">
           {quiz.has_correct_answer ? 'Select the correct answer(s)' : 'Select your preference'}
         </p>
         
@@ -304,8 +302,8 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                 key={index}
                 className={`border-2 rounded-xl p-4 transition hover:shadow-lg ${
                   selected 
-                    ? 'border-purple-500 bg-purple-50' 
-                    : 'hover:border-purple-300 hover:bg-purple-50'
+                    ? 'border-purple-500 bg-purple-900/30' 
+                    : 'border-gray-600 hover:border-purple-400 hover:bg-gray-700/50'
                 }`}
                 onClick={() => handleAnswer(originalIndex)}
               >
@@ -316,13 +314,13 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                       alt={`Option ${index + 1}`}
                       className="w-full h-40 object-cover rounded-lg mb-2"
                     />
-                    <div className="text-sm text-gray-500">Option {index + 1}</div>
+                    <div className="text-sm text-gray-400">Option {index + 1}</div>
                   </div>
                 ) : (
-                  <div className="text-lg font-medium text-gray-800 py-4">{option}</div>
+                  <div className="text-lg font-medium text-gray-200 py-4">{option}</div>
                 )}
                 {selected && (
-                  <div className="text-sm text-purple-600 font-semibold mt-1">✅ Selected</div>
+                  <div className="text-sm text-purple-400 font-semibold mt-1">✅ Selected</div>
                 )}
               </button>
             );
@@ -334,8 +332,8 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             onClick={goToPrevious}
             className={`flex-1 px-4 py-2 rounded-lg ${
               currentQuestion > 0 
-                ? 'bg-gray-500 text-white hover:bg-gray-600' 
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}
             disabled={currentQuestion === 0}
           >
@@ -345,7 +343,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           {currentQuestion === quiz.questions.length - 1 ? (
             <button
               onClick={submitQuiz}
-              className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+              className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
               disabled={!isAnswered}
             >
               📤 Submit Quiz
@@ -355,8 +353,8 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               onClick={goToNext}
               className={`flex-1 px-4 py-2 rounded-lg ${
                 isAnswered 
-                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
               disabled={!isAnswered}
             >
@@ -366,7 +364,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         </div>
         
         {!isAnswered && (
-          <p className="text-sm text-amber-600 text-center mt-2">
+          <p className="text-sm text-yellow-500 text-center mt-2">
             ⚠️ Please select an option to continue
           </p>
         )}

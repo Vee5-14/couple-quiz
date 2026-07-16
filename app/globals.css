@@ -1,19 +1,12 @@
 @import "tailwindcss";
 
-/* Base styles */
 @layer base {
   body {
-    color: #1a1a1a;
-    background-color: #ffffff;
-  }
-  
-  .dark body {
-    color: #f3f4f6;
     background-color: #111827;
+    color: #f3f4f6;
   }
 }
 
-/* Components */
 @layer components {
   .btn-primary {
     background-color: #7c3aed;
@@ -26,24 +19,4 @@
   .btn-primary:hover {
     background-color: #6d28d9;
   }
-  
-  .card {
-    background-color: #ffffff;
-    border-radius: 1rem;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-    padding: 1.5rem;
-    transition: all 0.2s;
-  }
-  .card:hover {
-    box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.15);
-  }
-  
-  .dark .card {
-    background-color: #1f2937;
-  }
-}
-
-/* Smooth transitions for theme switching */
-* {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
